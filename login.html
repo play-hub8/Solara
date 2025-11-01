@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>登录 - Solara</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    (function () {
+      const ua = navigator.userAgent || "";
+      const isMobileUA = /android|iphone|ipad|ipod|mobile|blackberry|phone|opera mini|windows phone/i.test(ua);
+      const isSmallScreen = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 820px)").matches;
+      const isMobile = isMobileUA || isSmallScreen;
+      window.__SOLARA_IS_MOBILE = isMobile;
+      if (!isMobile) {
+        document.documentElement.classList.add("desktop-view");
+        const desktopLink = document.createElement("link");
+        desktopLink.rel = "stylesheet";
+        desktopLink.href = "css/desktop.css";
+        desktopLink.id = "desktopStylesheet";
+        document.head.appendChild(desktopLink);
+        return;
+      }
+      document.documentElement.classList.add("mobile-view");
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "css/mobile.css";
+      link.id = "mobileStylesheet";
+      document.head.appendChild(link);
+      const setViewportUnit = () => {
+        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty("--mobile-vh", `${viewportHeight}px`);
+      };
+      const applyBodyClass = () => {
+        if (document.body) {
+          document.body.classList.add("mobile-view");
+          setViewportUnit();
+        }
+      };
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", applyBodyClass, { once: true });
+      } else {
+        applyBodyClass();
+      }
+      window.addEventListener("resize", setViewportUnit);
+      window.addEventListener("orientationchange", setViewportUnit);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", setViewportUnit);
+        window.visualViewport.addEventListener("scroll", setViewportUnit);
+      }
+      setViewportUnit();
+    })();
+  </script>
+  <style>
+    .login-container {
+      width: min(400px, 100%);
+      background: var(--container-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(var(--backdrop-blur));
+      -webkit-backdrop-filter: blur(var(--backdrop-blur));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+    .login-title {
+      font-size: 2em;
+      font-weight: 700;
+      margin: 0;
+      color: var(--primary-color);
+    }
+    .login-desc {
+      font-size: 1em;
+      color: var(--text-secondary-color);
+      margin: 0;
+      text-align: center;
+    }
+    .login-form {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .login-form input {
+      padding: 12px 16px;
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--component-bg);
+      color: var(--text-color);
+      font-size: 16px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .login-form input:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(26, 188, 156, 0.12);
+    }
+    .login-form button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 12px;
+      background: var(--primary-color);
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+    .login-form button:hover {
+      background: var(--primary-color-dark);
+      transform: translateY(-1px);
+    }
+    .login-form button:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h1 class="login-title">Solara</h1>
+    <p class="login-desc">请输入访问密码以继续</p>
+    <form class="login-form" id="login-form">
+      <input type="password" id="password" placeholder="密码" autocomplete="current-password" required>
+      <button type="submit">登录</button>
+    </form>
+  </div>
+  <script>
+    (function () {
+      const storedExpiry = localStorage.getItem("authExpiry");
+      if (storedExpiry) {
+        localStorage.removeItem("authExpiry");
+      }
+    })();
+    document.getElementById("login-form")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const pwdInput = document.getElementById("password");
+      const password = pwdInput instanceof HTMLInputElement ? pwdInput.value : "";
+      try {
+        const response = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ password }),
+        });
+        if (response.ok) {
+          window.location.href = "/";
+          return;
+        }
+        alert("密码错误，请重试");
+      } catch (error) {
+        console.error(error);
+        alert("登录出错，请稍后再试");
+      }
+    });
+  </script>
+</body>
+</html>
