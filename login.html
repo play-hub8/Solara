@@ -153,6 +153,9 @@
     .background-stage {
       position: fixed;
       inset: 0;
+      width: 100%;
+      max-width: 100vw;
+      box-sizing: border-box;
       overflow: hidden;
       pointer-events: none;
       z-index: -2;
@@ -217,7 +220,7 @@
     body.login-page.mobile-view .login-shell {
       width: 100%;
       max-width: 440px;
-      padding: clamp(18px, 6vw, 28px);
+      padding: 0;
       min-height: auto;
       flex: 1 1 auto;
     }

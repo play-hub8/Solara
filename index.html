@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Solara</title>
     <meta name="apple-mobile-web-app-title" content="Solara">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -65,6 +65,39 @@
             setViewportUnit();
         })();
     </script>
+    <style id="safari-ios-26-fix">
+        /* --- Safari iOS 26 Fix --- */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            overflow-x: hidden;
+            box-sizing: border-box;
+        }
+        .login-shell {
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-inline: auto;
+        }
+        body {
+            padding-left: max(env(safe-area-inset-left), 16px);
+            padding-right: max(env(safe-area-inset-right), 16px);
+        }
+        @supports (height: 100dvh) {
+            :root {
+                --mobile-vh: 100dvh;
+            }
+        }
+    </style>
+    <script>
+        (function fixMobileVH(){
+            document.documentElement.style.setProperty("--mobile-vh", window.innerHeight + "px");
+            window.addEventListener("resize", fixMobileVH);
+            window.addEventListener("orientationchange", fixMobileVH);
+        })();
+    </script>
+
 </head>
 <body>
     <div class="background-stage" id="backgroundStage" aria-hidden="true">
