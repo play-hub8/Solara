@@ -2356,6 +2356,10 @@ function setupInteractions() {
             }
 
             activatePlaylistItem(index);
+
+            if (event.detail !== 0 && typeof item.blur === "function") {
+                item.blur();
+            }
         };
 
         const handleKeydown = (event) => {
