@@ -774,6 +774,18 @@ saveFavoriteState();
     let lastPositionUpdateTime = 0;
     const MEDIA_SESSION_ENDED_FLAG = '__solaraMediaSessionHandledEnded';
 
+    const preferLockScreenTrackControls = (() => {
+        if (typeof navigator === 'undefined') {
+            return false;
+        }
+        const ua = navigator.userAgent || '';
+        const platform = navigator.platform || '';
+        const isIOS = /iP(ad|hone|od)/.test(ua);
+        const isTouchMac = !isIOS && platform === 'MacIntel' && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1;
+        return isIOS || isTouchMac;
+    })();
+    const allowLockScreenScrubbing = typeof navigator.mediaSession.setPositionState === 'function' && !preferLockScreenTrackControls;
+
     function triggerMediaSessionMetadataRefresh() {
         let refreshed = false;
         if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
@@ -858,7 +870,7 @@ saveFavoriteState();
 
     function updatePositionState() {
         // iOS 15+ 支持 setPositionState；用于让锁屏进度条可拖动与显示
-        if (typeof navigator.mediaSession.setPositionState !== 'function') return;
+        if (!allowLockScreenScrubbing) return;
         const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
         const position = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
         const playbackRate = Number.isFinite(audio.playbackRate) ? audio.playbackRate : 1;
@@ -914,15 +926,21 @@ saveFavoriteState();
             navigator.mediaSession.setActionHandler('seekbackward', null);
             navigator.mediaSession.setActionHandler('seekforward', null);
 
-            // 关键：让锁屏支持拖动进度到任意位置
-            navigator.mediaSession.setActionHandler('seekto', (e) => {
-                if (!e || typeof e.seekTime !== 'number') return;
-                audio.currentTime = Math.max(0, Math.min(audio.duration || 0, e.seekTime));
-                if (e.fastSeek && typeof audio.fastSeek === 'function') {
-                    audio.fastSeek(audio.currentTime);
-                }
-                updatePositionState();
-            });
+            if (allowLockScreenScrubbing) {
+                // 关键：让锁屏支持拖动进度到任意位置
+                navigator.mediaSession.setActionHandler('seekto', (e) => {
+                    if (!e || typeof e.seekTime !== 'number') return;
+                    audio.currentTime = Math.max(0, Math.min(audio.duration || 0, e.seekTime));
+                    if (e.fastSeek && typeof audio.fastSeek === 'function') {
+                        audio.fastSeek(audio.currentTime);
+                    }
+                    updatePositionState();
+                });
+            } else {
+                try {
+                    navigator.mediaSession.setActionHandler('seekto', null);
+                } catch (_) {}
+            }
 
             // 可选：切换播放状态（大部分系统自己会处理）
             navigator.mediaSession.setActionHandler('play', async () => {
