@@ -1632,12 +1632,42 @@ html.mobile-view .favorites .favorite-item-action--remove {
     justify-self: flex-start;
 }
 
+html:not(.mobile-view) .transport-controls {
+    justify-self: stretch;
+    width: 100%;
+    justify-content: space-between;
+    gap: 0;
+}
+
 html:not(.mobile-view) #playModeBtn {
-    margin-right: 8px;
+    margin-right: 0;
 }
 
 #mobileQueueToggle {
     display: none;
+}
+
+#shuffleToggleBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.transport-button--shuffle .shuffle-icon {
+    display: inline-flex;
+    transition: opacity 0.24s ease, filter 0.24s ease, text-shadow 0.24s ease;
+    filter: none;
+    text-shadow: none;
+}
+
+.transport-button--shuffle .shuffle-icon--off {
+    opacity: 0.9;
+}
+
+.transport-button--shuffle .shuffle-icon--on {
+    opacity: 1;
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.45));
+    text-shadow: 0 0 1px currentColor;
 }
 
 #playPauseBtn {

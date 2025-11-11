@@ -505,6 +505,10 @@ body.mobile-view #mobileQueueToggle {
     display: inline-flex;
 }
 
+body.mobile-view #shuffleToggleBtn {
+    display: none;
+}
+
 body.mobile-view .audio-tools {
     display: none;
 }
