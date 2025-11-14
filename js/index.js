@@ -366,6 +366,14 @@ function safeSetLocalStorage(key, value) {
     }
 }
 
+function safeRemoveLocalStorage(key) {
+    try {
+        localStorage.removeItem(key);
+    } catch (error) {
+        console.warn(`移除本地存储失败: ${key}`, error);
+    }
+}
+
 function parseJSON(value, fallback) {
     if (!value) return fallback;
     try {
@@ -375,6 +383,38 @@ function parseJSON(value, fallback) {
         console.warn("解析本地存储 JSON 失败", error);
         return fallback;
     }
+}
+
+function cloneSearchResults(results) {
+    if (!Array.isArray(results)) {
+        return [];
+    }
+    try {
+        return JSON.parse(JSON.stringify(results));
+    } catch (error) {
+        console.warn("复制搜索结果失败，回退到浅拷贝", error);
+        return results.map((item) => {
+            if (item && typeof item === "object") {
+                return { ...item };
+            }
+            return item;
+        });
+    }
+}
+
+function sanitizeStoredSearchState(data, defaultSource = SOURCE_OPTIONS[0].value) {
+    if (!data || typeof data !== "object") {
+        return null;
+    }
+
+    const keyword = typeof data.keyword === "string" ? data.keyword : "";
+    const sourceValue = typeof data.source === "string" ? data.source : defaultSource;
+    const source = normalizeSource(sourceValue);
+    const page = Number.isInteger(data.page) && data.page > 0 ? data.page : 1;
+    const hasMore = typeof data.hasMore === "boolean" ? data.hasMore : true;
+    const results = cloneSearchResults(data.results);
+
+    return { keyword, source, page, hasMore, results };
 }
 
 function loadStoredPalettes() {
@@ -549,6 +589,18 @@ const savedSearchSource = (() => {
     return normalizeSource(stored);
 })();
 
+const LAST_SEARCH_STATE_STORAGE_KEY = "lastSearchState.v1";
+
+const savedLastSearchState = (() => {
+    const stored = safeGetLocalStorage(LAST_SEARCH_STATE_STORAGE_KEY);
+    const parsed = parseJSON(stored, null);
+    return sanitizeStoredSearchState(parsed, savedSearchSource || SOURCE_OPTIONS[0].value);
+})();
+
+let lastSearchStateCache = savedLastSearchState
+    ? { ...savedLastSearchState, results: cloneSearchResults(savedLastSearchState.results) }
+    : null;
+
 const savedPlaybackTime = (() => {
     const stored = safeGetLocalStorage("currentPlaybackTime");
     const time = Number.parseFloat(stored);
@@ -699,17 +751,17 @@ Object.freeze(API);
 
 const state = {
     onlineSongs: [],
-    searchResults: [],
+    searchResults: cloneSearchResults(savedLastSearchState?.results) || [],
     renderedSearchCount: 0,
     currentTrackIndex: savedCurrentTrackIndex,
     currentAudioUrl: null,
     lyricsData: [],
     currentLyricLine: -1,
     currentPlaylist: savedCurrentPlaylist, // 'online', 'search', or 'playlist'
-    searchPage: 1,
-    searchKeyword: "", // 确保这里有初始值
-    searchSource: savedSearchSource,
-    hasMoreResults: true,
+    searchPage: savedLastSearchState?.page || 1,
+    searchKeyword: savedLastSearchState?.keyword || "", // 确保这里有初始值
+    searchSource: savedLastSearchState ? savedLastSearchState.source : savedSearchSource,
+    hasMoreResults: typeof savedLastSearchState?.hasMore === "boolean" ? savedLastSearchState.hasMore : true,
     currentSong: savedCurrentSong,
     currentArtworkUrl: null,
     debugMode: false,
@@ -1607,13 +1659,17 @@ function toggleSearchMode(enable) {
 }
 
 // 新增：显示搜索结果
-function showSearchResults() {
+function showSearchResults(options = {}) {
+    const { restore = false } = options;
     toggleSearchMode(true);
     if (state.sourceMenuOpen) {
         scheduleSourceMenuPositionUpdate();
     }
     if (state.qualityMenuOpen) {
         schedulePlayerQualityMenuPositionUpdate();
+    }
+    if (restore) {
+        restoreSearchResultsList();
     }
 }
 
@@ -1634,6 +1690,94 @@ function hideSearchResults() {
     state.renderedSearchCount = 0;
     resetSelectedSearchResults();
     closeImportSelectedMenu();
+}
+
+function createSearchStateSnapshot() {
+    return {
+        keyword: typeof state.searchKeyword === "string" ? state.searchKeyword : "",
+        source: normalizeSource(state.searchSource),
+        page: Number.isInteger(state.searchPage) && state.searchPage > 0 ? state.searchPage : 1,
+        hasMore: Boolean(state.hasMoreResults),
+        results: cloneSearchResults(state.searchResults),
+    };
+}
+
+function persistLastSearchState() {
+    const snapshot = createSearchStateSnapshot();
+    if (!snapshot.keyword) {
+        lastSearchStateCache = null;
+        safeRemoveLocalStorage(LAST_SEARCH_STATE_STORAGE_KEY);
+        return;
+    }
+    lastSearchStateCache = { ...snapshot, results: cloneSearchResults(snapshot.results) };
+    safeSetLocalStorage(LAST_SEARCH_STATE_STORAGE_KEY, JSON.stringify(snapshot));
+}
+
+function restoreStateFromSnapshot(snapshot) {
+    const sanitized = sanitizeStoredSearchState(snapshot, state.searchSource || SOURCE_OPTIONS[0].value);
+    if (!sanitized || !sanitized.keyword) {
+        return false;
+    }
+    state.searchKeyword = sanitized.keyword;
+    state.searchSource = sanitized.source;
+    state.searchPage = sanitized.page;
+    state.hasMoreResults = sanitized.hasMore;
+    state.searchResults = cloneSearchResults(sanitized.results);
+    lastSearchStateCache = { ...sanitized, results: cloneSearchResults(sanitized.results) };
+    safeSetLocalStorage("searchSource", state.searchSource);
+    updateSourceLabel();
+    buildSourceMenu();
+    return true;
+}
+
+function restoreSearchResultsList() {
+    const container = dom.searchResultsList || dom.searchResults;
+    if (!container) {
+        return;
+    }
+    if (container.childElementCount > 0) {
+        return;
+    }
+    const results = Array.isArray(state.searchResults) ? state.searchResults : [];
+    state.renderedSearchCount = 0;
+    displaySearchResults(results, {
+        reset: true,
+        totalCount: results.length,
+    });
+}
+
+function handleSearchInputFocus() {
+    if (!dom.searchInput) {
+        return;
+    }
+
+    const currentValue = dom.searchInput.value.trim();
+    if (currentValue && state.searchKeyword && currentValue !== state.searchKeyword) {
+        return;
+    }
+
+    const hasKeyword = typeof state.searchKeyword === "string" && state.searchKeyword.length > 0;
+    const hasResults = Array.isArray(state.searchResults) && state.searchResults.length > 0;
+
+    if (!hasKeyword || !hasResults) {
+        const restored = restoreStateFromSnapshot(lastSearchStateCache);
+        if (!restored) {
+            return;
+        }
+    }
+
+    if (!dom.searchInput.value.trim()) {
+        dom.searchInput.value = state.searchKeyword;
+        window.requestAnimationFrame(() => {
+            try {
+                dom.searchInput.select();
+            } catch (error) {
+                console.warn("选择搜索文本失败", error);
+            }
+        });
+    }
+
+    showSearchResults({ restore: true });
 }
 
 const playModeTexts = {
@@ -2834,6 +2978,11 @@ function setupInteractions() {
         performSearch();
     });
 
+    dom.searchInput.addEventListener("focus", () => {
+        debugLog("搜索输入框获得焦点，尝试恢复上次搜索结果");
+        handleSearchInputFocus();
+    });
+
     dom.searchInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") {
             e.preventDefault();
@@ -3124,6 +3273,7 @@ async function performSearch(isLiveSearch = false) {
             reset: state.searchPage === 1,
             totalCount: state.searchResults.length,
         });
+        persistLastSearchState();
         debugLog(`搜索完成: 总共显示 ${state.searchResults.length} 个结果`);
 
         // 如果没有结果，显示提示
@@ -3174,6 +3324,7 @@ async function loadMoreResults() {
             displaySearchResults(results, {
                 totalCount: state.searchResults.length,
             });
+            persistLastSearchState();
             debugLog(`加载完成: 新增 ${results.length} 个结果`);
         } else {
             state.hasMoreResults = false;
